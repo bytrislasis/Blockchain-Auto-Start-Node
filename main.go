@@ -18,11 +18,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-type Config struct {
-	Period  int64 `json:"period"`
-	ChainId int64 `json:"chainId"`
-}
-
 func readConfig() Config {
 	file, err := os.Open("config.json")
 	if err != nil {
@@ -62,8 +57,30 @@ func writeInfoFile(nodes []string, keys []*ecdsa.PrivateKey) {
 	}
 }
 
+type Config struct {
+	Period  uint64 `json:"period"`
+	ChainID int64  `json:"chainId"`
+}
+
 func main() {
-	config := readConfig()
+
+	//masternode oluşturmak için eklememiz gerekmekte
+	cmd := exec.Command("bootnode", "--genkey", "bootnode.key")
+	err := cmd.Run()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	config := Config{}
+	configFile, err := os.Open("config.json")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer configFile.Close()
+
+	jsonParser := json.NewDecoder(configFile)
+	jsonParser.Decode(&config)
+
 	nodes := []string{"node1", "node2", "node3"}
 	var keys []*ecdsa.PrivateKey
 	var addresses []common.Address
@@ -110,7 +127,7 @@ func main() {
 
 	genesis := &core.Genesis{
 		Config: &params.ChainConfig{
-			ChainID:             big.NewInt(config.ChainId),
+			ChainID:             big.NewInt(config.ChainID),
 			HomesteadBlock:      big.NewInt(0),
 			EIP150Block:         big.NewInt(0),
 			EIP155Block:         big.NewInt(0),
@@ -119,7 +136,7 @@ func main() {
 			ConstantinopleBlock: big.NewInt(0),
 			PetersburgBlock:     big.NewInt(0),
 			Clique: &params.CliqueConfig{
-				Period: uint64(config.Period),
+				Period: config.Period,
 				Epoch:  30000,
 			},
 		},
@@ -135,7 +152,18 @@ func main() {
 		},
 	}
 
-	for _, node := range nodes {
+	// Create a file to output node info
+	infoFile, err := os.Create("info.txt")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer infoFile.Close()
+
+	startAuthRPCPort := 8090
+	startHTTPPort := 8546
+	startUDPPort := 30305
+
+	for i, node := range nodes {
 		// Marshal the genesis to JSON format
 		genesisJSON, err := genesis.MarshalJSON()
 		if err != nil {
@@ -156,6 +184,39 @@ func main() {
 			log.Printf("geth init output: %s", output)
 			log.Fatal(err)
 		}
+
+		// Write node info to file
+		infoFile.WriteString(fmt.Sprintf("Node: %s\n", node))
+		infoFile.WriteString(fmt.Sprintf("Address: %s\n", addresses[i].Hex()))
+		infoFile.WriteString(fmt.Sprintf("PrivateKey: %x\n", crypto.FromECDSA(keys[i])))
+		infoFile.WriteString("Password: asdasdasd\n\n")
+
+		// Create start script for each node
+		startScript, err := os.Create(fmt.Sprintf("%s.sh", node))
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer startScript.Close()
+		startScript.WriteString(fmt.Sprintf("geth --datadir ./%s --syncmode 'full' --http --http.addr 'localhost' --http.port %d --http.api 'personal,eth,net,web3,txpool,miner' --http.corsdomain \"*\" --networkid %d  -nodiscover --rpc.allow-unprotected-txs --allow-insecure-unlock --miner.etherbase %s --unlock %s --password %s/password.txt --port %d --authrpc.port %d --mine", node, startHTTPPort, config.ChainID, addresses[i].Hex(), addresses[i].Hex(), node, startUDPPort, startAuthRPCPort))
+		// Increment the port numbers for the next node
+		startAuthRPCPort++
+		startHTTPPort++
+		startUDPPort++
+
+		//masternode sh oluşturuyoruz
+		bootnodeScript, err := os.Create("startBootnode.sh")
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer bootnodeScript.Close()
+
+		bootnodeScript.WriteString("#!/bin/sh\n")
+		bootnodeScript.WriteString("bootnode --nodekey=bootnode.key")
+
+		err = bootnodeScript.Chmod(0755)
+		if err != nil {
+			log.Fatal(err)
+		}
+
 	}
-	writeInfoFile(nodes, keys)
 }
