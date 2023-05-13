@@ -197,7 +197,7 @@ func main() {
 			log.Fatal(err)
 		}
 		defer startScript.Close()
-		startScript.WriteString(fmt.Sprintf("geth --datadir ./%s --syncmode 'full' --http --http.addr '127.0.0.1' --http.port %d --http.api 'personal,eth,net,web3,txpool,miner' --http.corsdomain \"*\" --networkid %d  -nodiscover --rpc.allow-unprotected-txs --allow-insecure-unlock --miner.etherbase %s --unlock %s --password %s/password.txt --port %d --authrpc.port %d --mine", node, startHTTPPort, config.ChainID, addresses[i].Hex(), addresses[i].Hex(), node, startUDPPort, startAuthRPCPort))
+		startScript.WriteString(fmt.Sprintf("geth --datadir ./%s --syncmode 'full' --http --http.addr '127.0.0.1' --http.port %d --http.api 'personal,eth,net,web3,txpool,miner' --http.corsdomain \"*\" --networkid %d  --allow-insecure-unlock --miner.etherbase %s --unlock %s --password %s/password.txt --port %d --authrpc.port %d --mine", node, startHTTPPort, config.ChainID, addresses[i].Hex(), addresses[i].Hex(), node, startUDPPort, startAuthRPCPort))
 		// Increment the port numbers for the next node
 		startAuthRPCPort++
 		startHTTPPort++
