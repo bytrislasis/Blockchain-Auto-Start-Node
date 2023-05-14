@@ -199,7 +199,7 @@ func initializeGenesisAndCreateStartScripts(nodes []string, keys []*ecdsa.Privat
 		writeAndInitializeGenesis(node, genesis)
 
 		// Write node info to file
-		writeNodeInfo(infoFile, node, keys[i], addresses[i])
+		writeNodeInfo(config, infoFile, node, keys[i], addresses[i])
 
 		// Create start script for each node
 		createStartScript(node, addresses[i], startHTTPPort, startUDPPort, startAuthRPCPort, int(config.ChainID), bootnodeURL)
@@ -239,11 +239,11 @@ func writeAndInitializeGenesis(node string, genesis *core.Genesis) {
 }
 
 // writeNodeInfo: Bu işlev, düğüm bilgilerini bir dosyaya yazar.
-func writeNodeInfo(infoFile *os.File, node string, key *ecdsa.PrivateKey, address common.Address) {
+func writeNodeInfo(config Config, infoFile *os.File, node string, key *ecdsa.PrivateKey, address common.Address) {
 	infoFile.WriteString(fmt.Sprintf("Node: %s\n", node))
 	infoFile.WriteString(fmt.Sprintf("Address: %s\n", address.Hex()))
 	infoFile.WriteString(fmt.Sprintf("PrivateKey: %x\n", crypto.FromECDSA(key)))
-	infoFile.WriteString("Password: asdasdasd\n\n")
+	infoFile.WriteString(fmt.Sprintf("Password: %s\n", config.Password))
 }
 
 // createStartScript: Bu işlev, bir düğüm için başlatma scripti oluşturur.
