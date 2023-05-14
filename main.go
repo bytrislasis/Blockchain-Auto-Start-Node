@@ -36,9 +36,10 @@ func main() {
 	config := initializeConfig("config.json")
 
 	// Generate bootnode key
-	fmt.Println("----------------------------")
+
+	fmt.Println("---------------------------- BOOTNOIDE KEY AND URL ----------------------------")
 	fmt.Println(generateBootNodeKeyAndURL(config))
-	fmt.Println("----------------------------")
+	fmt.Println("---------------------------- BOOTNOIDE KEY AND URL ----------------------------")
 
 	// Generate bootnode key
 	generateBootNodeKey()
@@ -189,7 +190,7 @@ func initializeGenesisAndCreateStartScripts(nodes []string, keys []*ecdsa.Privat
 	startUDPPort := config.StartUDPPort
 
 	// Generate the enode URL from the bootnode key
-	bootnodeKey, _ := crypto.HexToECDSA("5fa5dbb2a3e305932946666e600d1a1ac55602fcbeffbf38daa301d5345ce68f")
+	bootnodeKey, _ := crypto.HexToECDSA(config.BootnodeKey)
 	bootnodePubKey := bootnodeKey.PublicKey
 	_ = crypto.FromECDSAPub(&bootnodePubKey)
 	bootnodeURL := generateBootNodeKeyAndURL(config)
