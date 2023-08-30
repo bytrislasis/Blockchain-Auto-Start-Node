@@ -4,12 +4,9 @@ import (
 	"crypto/ecdsa"
 	"encoding/json"
 	"fmt"
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/tyler-smith/go-bip39"
 	"io/ioutil"
 	"log"
 	"math/big"
@@ -17,7 +14,6 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/btcsuite/btcutil/hdkeychain"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -45,9 +41,6 @@ func main() {
 	fmt.Println(generateBootNodeKeyAndURL(config))
 	fmt.Println("---------------------------- BOOTNOIDE KEY AND URL ----------------------------")
 
-	//burayı kendi keliemleriniz ile değiştirmeniz gerekiyor
-	mnemonic := "crowd buffalo odor silver close police nominee era horn steak train vibrant"
-
 	// Generate bootnode key
 	generateBootNodeKey()
 
@@ -55,7 +48,7 @@ func main() {
 	nodes := []string{"node1", "node2", "node3"}
 
 	// Create and initialize nodes
-	keys, addresses := createAndInitializeNodesWithMnemonic(nodes, config, mnemonic)
+	keys, addresses := createAndInitializeNodes(nodes, config)
 
 	// Prepare extra data for genesis
 	extraData := prepareExtraData(addresses)
@@ -65,92 +58,6 @@ func main() {
 
 	// Initialize genesis for each node and create start scripts
 	initializeGenesisAndCreateStartScripts(nodes, keys, addresses, genesis, config)
-}
-
-func createAndInitializeNodesWithMnemonic(nodes []string, config Config, mnemonic string) ([]*ecdsa.PrivateKey, []common.Address) {
-	var keys []*ecdsa.PrivateKey
-	var addresses []common.Address
-
-	for index, node := range nodes {
-		os.MkdirAll(node, os.ModePerm)
-		passwordFile, err := os.Create(fmt.Sprintf("%s/password.txt", node))
-		if err != nil {
-			log.Fatal(err)
-		}
-		passwordFile.WriteString(config.Password)
-		passwordFile.Close()
-
-		key, address := generateKeyAndAddressFromMnemonic(node, config.Password, mnemonic, index)
-		keys = append(keys, key)
-		addresses = append(addresses, address)
-	}
-
-	return keys, addresses
-}
-
-func toECDSA(d []byte, strict bool) *ecdsa.PrivateKey {
-	priv := new(ecdsa.PrivateKey)
-	priv.PublicKey.Curve = crypto.S256()
-	if strict && 8*len(d) != priv.Params().BitSize {
-		return nil
-	}
-	priv.D = new(big.Int).SetBytes(d)
-	// The priv.D must < N
-	if priv.D.Cmp(crypto.S256().Params().N) >= 0 {
-		return nil
-	}
-	priv.PublicKey.X, priv.PublicKey.Y = priv.PublicKey.Curve.ScalarBaseMult(d)
-	if priv.PublicKey.X == nil {
-		return nil
-	}
-	return priv
-}
-
-func generateKeyAndAddressFromMnemonic(node, password, mnemonic string, index int) (*ecdsa.PrivateKey, common.Address) {
-	// Mnemonic'ten seed oluştur
-	seed := bip39.NewSeed(mnemonic, "")
-
-	// Ethereum path standardı: m/44'/60'/0'/0/index
-	path := accounts.DefaultBaseDerivationPath
-	path[3] = uint32(index)
-
-	// Seed ve path kullanarak anahtar türet
-	masterKey, err := hdkeychain.NewMaster(seed, &chaincfg.MainNetParams)
-	key, _ := derivePrivateKeyForPath(masterKey, path)
-
-	// Anahtar kullanarak keystore oluştur
-	ks := keystore.NewKeyStore(fmt.Sprintf("%s/keystore", node), keystore.StandardScryptN, keystore.StandardScryptP)
-	account, err := ks.ImportECDSA(key, password)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Save the private key to a file
-	privateKeyBytes := crypto.FromECDSA(key)
-	err = ioutil.WriteFile(fmt.Sprintf("%s/keystore/privatekey.txt", node), privateKeyBytes, 0644)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	return key, account.Address
-}
-
-// Bu fonksiyon, belirtilen path için özel anahtar türetir.
-func derivePrivateKeyForPath(master *hdkeychain.ExtendedKey, path accounts.DerivationPath) (*ecdsa.PrivateKey, error) {
-	for _, n := range path {
-		var err error
-		master, err = master.Child(n)
-		if err != nil {
-			return nil, err
-		}
-	}
-	key, err := master.ECPrivKey()
-	if err != nil {
-		return nil, err
-	}
-
-	privateECDSA := toECDSA(key.Serialize(), true)
-	return privateECDSA, nil
 }
 
 // initializeConfig: Bu işlev, konfigürasyon dosyasını açar, içeriğini okur ve Config yapısını doldurur.
@@ -332,6 +239,23 @@ func writeAndInitializeGenesis(node string, genesis *core.Genesis) {
 	}
 }
 
+func getLocalIP() net.IP {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for _, address := range addrs {
+		// IPNet tipindeki adresi alıyoruz; loopback adreslerini kontrol ediyoruz.
+		if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			if ipnet.IP.To4() != nil {
+				return ipnet.IP
+			}
+		}
+	}
+	return nil
+}
+
 // writeNodeInfo: Bu işlev, düğüm bilgilerini bir dosyaya yazar.
 func writeNodeInfo(config Config, infoFile *os.File, node string, key *ecdsa.PrivateKey, address common.Address) {
 	infoFile.WriteString(fmt.Sprintf("Node: %s\n", node))
@@ -340,7 +264,6 @@ func writeNodeInfo(config Config, infoFile *os.File, node string, key *ecdsa.Pri
 	infoFile.WriteString(fmt.Sprintf("Password: %s\n", config.Password))
 }
 
-// createStartScript: Bu işlev, bir düğüm için başlatma scripti oluşturur.
 func createStartScript(node string, address common.Address, startHTTPPort, startUDPPort, startAuthRPCPort, chainID int, bootnodeURL string) {
 	absolutePath, err := os.Getwd()
 	if err != nil {
@@ -392,21 +315,4 @@ func generateBootNodeKeyAndURL(config Config) string {
 	bootnodeEnode := enode.NewV4(&bootnodePubKey, ip, config.EnodePort, config.EnodePort)
 
 	return bootnodeEnode.URLv4()
-}
-
-func getLocalIP() net.IP {
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	for _, address := range addrs {
-		// IPNet tipindeki adresi alıyoruz; loopback adreslerini kontrol ediyoruz.
-		if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-			if ipnet.IP.To4() != nil {
-				return ipnet.IP
-			}
-		}
-	}
-	return nil
 }
