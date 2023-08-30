@@ -179,6 +179,51 @@ func generateBootNodeKey() {
 	}
 }
 
+// createAndInitializeNodes: Bu işlev, belirtilen düğümler için dizinler oluşturur ve bunları başlatır.
+func createAndInitializeNodes(nodes []string, config Config) ([]*ecdsa.PrivateKey, []common.Address) {
+	var keys []*ecdsa.PrivateKey
+	var addresses []common.Address
+
+	for _, node := range nodes {
+		os.MkdirAll(node, os.ModePerm)
+		passwordFile, err := os.Create(fmt.Sprintf("%s/password.txt", node))
+		if err != nil {
+			log.Fatal(err)
+		}
+		passwordFile.WriteString(config.Password)
+		passwordFile.Close()
+
+		key, address := generateKeyAndAddress(node, config.Password)
+		keys = append(keys, key)
+		addresses = append(addresses, address)
+	}
+
+	return keys, addresses
+}
+
+// generateKeyAndAddress: Bu işlev, yeni bir anahtar ve adres oluşturur.
+func generateKeyAndAddress(node, password string) (*ecdsa.PrivateKey, common.Address) {
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	ks := keystore.NewKeyStore(fmt.Sprintf("%s/keystore", node), keystore.StandardScryptN, keystore.StandardScryptP)
+	account, err := ks.ImportECDSA(key, password)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Save the private key to a file
+	privateKeyBytes := crypto.FromECDSA(key)
+	err = ioutil.WriteFile(fmt.Sprintf("%s/keystore/privatekey.txt", node), privateKeyBytes, 0644)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return key, account.Address
+}
+
 // prepareExtraData: Bu işlev, genesis bloğu için extra data'yı hazırlar.
 func prepareExtraData(addresses []common.Address) []byte {
 	extraVanity := 32 // ExtraData field's vanity bytes size
@@ -243,7 +288,6 @@ func initializeGenesisAndCreateStartScripts(nodes []string, keys []*ecdsa.Privat
 	bootnodeURL := generateBootNodeKeyAndURL(config)
 
 	for i, node := range nodes {
-
 		// Write genesis to a JSON file and initialize it
 		writeAndInitializeGenesis(node, genesis)
 
