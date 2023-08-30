@@ -6,5 +6,5 @@
   "startUDPPort": 30303,
   "password": "password",
   "bootnodeKey": "5fa5dbb2a3e305932946666e600d1a1ac55602fcbeffbf38daa301d5345ce68f",
-  "enodePort": 30301
+  "enodePort": 30301,
 }
