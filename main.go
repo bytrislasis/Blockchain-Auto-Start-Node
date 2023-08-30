@@ -45,6 +45,7 @@ func main() {
 	fmt.Println(generateBootNodeKeyAndURL(config))
 	fmt.Println("---------------------------- BOOTNOIDE KEY AND URL ----------------------------")
 
+	//burayı kendi keliemleriniz ile değiştirmeniz gerekiyor
 	mnemonic := "crowd buffalo odor silver close police nominee era horn steak train vibrant"
 
 	// Generate bootnode key
